@@ -62,6 +62,23 @@ LGBM_DEFAULT_GRID: dict[str, list[float | int]] = {
     "reg_alpha": [0.0, 0.1, 1.0], "min_split_gain": [0.0, 0.1, 0.5],
 }
 
+RF_GRID_KEYS = (
+    "n_estimators",
+    "max_depth",
+    "min_samples_split",
+    "min_samples_leaf",
+    "max_features",
+)
+RF_DEFAULT_GRID: dict[str, list[float | int]] = {
+    # A modest default grid for the first enriched Random Forest run.
+    # Every value remains configurable through --grid-file or CLI options.
+    "n_estimators": [300],
+    "max_depth": [8, 16],
+    "min_samples_split": [2, 10],
+    "min_samples_leaf": [1, 5],
+    "max_features": [0.7, 1.0],
+}
+
 
 def _backend(model_name: str):
     if model_name == "xgboost":
@@ -79,6 +96,17 @@ def _backend(model_name: str):
             save_feature_importance,
             LGBM_GRID_KEYS,
             LGBM_DEFAULT_GRID,
+        )
+    if model_name == "random_forest":
+        from random_forest_forecast_enriched import (
+            make_rf_pipeline,
+            save_feature_importance,
+        )
+        return (
+            make_rf_pipeline,
+            save_feature_importance,
+            RF_GRID_KEYS,
+            RF_DEFAULT_GRID,
         )
     raise ValueError(f"Unknown tree model: {model_name}")
 
@@ -105,7 +133,7 @@ def _make_model(
     device_type: str,
 ):
     factory, _, _, _ = _backend(model_name)
-    if model_name == "xgboost":
+    if model_name in {"xgboost", "random_forest"}:
         return factory(data, params, n_jobs, random_state)
     return factory(data, params, n_jobs, random_state, device_type)
 
@@ -264,7 +292,7 @@ def make_grid_id(model_name: str, index: int, params: dict[str, float | int]) ->
             f"_l2{_format_value(params['reg_lambda'])}_l1{_format_value(params['reg_alpha'])}"
             f"_g{_format_value(params['gamma'])}"
         )
-    else:
+    elif model_name == "lightgbm":
         short = (
             f"d{_format_value(params['max_depth'])}_leaves{_format_value(params['num_leaves'])}"
             f"_e{_format_value(params['n_estimators'])}_lr{_format_value(params['learning_rate'])}"
@@ -272,6 +300,14 @@ def make_grid_id(model_name: str, index: int, params: dict[str, float | int]) ->
             f"_ss{_format_value(params['subsample'])}_cs{_format_value(params['colsample_bytree'])}"
             f"_l2{_format_value(params['reg_lambda'])}_l1{_format_value(params['reg_alpha'])}"
             f"_gain{_format_value(params['min_split_gain'])}"
+        )
+    else:
+        short = (
+            f"e{_format_value(params['n_estimators'])}"
+            f"_d{_format_value(params['max_depth'])}"
+            f"_mss{_format_value(params['min_samples_split'])}"
+            f"_msl{_format_value(params['min_samples_leaf'])}"
+            f"_mf{_format_value(params['max_features'])}"
         )
     return f"grid_{index:03d}_{short}"
 

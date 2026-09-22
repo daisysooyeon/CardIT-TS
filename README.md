@@ -84,6 +84,14 @@ Enriched DeepAR:
 python deepar_forecast_enriched.py --frequency weekly --method recursive --device cuda --output-dir outputs/deepar_enriched_weekly
 ```
 
+Enriched Random Forest:
+
+```powershell
+python random_forest_forecast_enriched.py --frequency weekly --method both --output-dir outputs/random_forest_enriched --n-jobs -1
+```
+
+빠른 smoke test는 `--limit-combinations 1`을 추가한다.
+
 ## 모델 비교 그래프
 
 기존 10개 account를 대상으로 모델별 best run을 선택해 비교하는 스크립트:
@@ -99,4 +107,3 @@ python model_comparison_plots_both_rmse.py --account-ids 406 949 2043
 ```
 
 결과는 `outputs/model_comparison_both_rmse/`에 저장된다.
-

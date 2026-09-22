@@ -200,6 +200,51 @@ outputs/lightgbm_regularization_sampling_sweep/
 
 Enriched DeepAR은 알려진 미래 달력 feature, 계약성 대출 상환액, static feature를 함께 사용한다. 현재 잔차만 예측하는 구조는 아니다.
 
+### 5.6 Enriched Random Forest
+
+파일: `random_forest_forecast_enriched.py`
+
+- enriched XGBoost/LightGBM과 동일한 공통 runner 사용
+- `berka_master_m_enriched.parquet`, `berka_master_w_enriched.parquet` 사용
+- inflow와 outflow를 별도 모델로 학습하고 net flow는 사후 계산
+- monthly/weekly 및 recursive/direct 지원
+- tree model이므로 numeric scaling 불필요
+- `criterion="squared_error"`, `bootstrap=True`
+- 기본 grid:
+  - `n_estimators`: 300
+  - `max_depth`: 8, 16
+  - `min_samples_split`: 2, 10
+  - `min_samples_leaf`: 1, 5
+  - `max_features`: 0.7, 1.0
+- feature importance는 XGBoost/LightGBM의 gain이 아니라 Random Forest의 impurity-based mean decrease in impurity(MDI)다.
+
+기본 grid는 16개 조합이다. 실행 예시는 다음과 같다.
+
+```powershell
+python random_forest_forecast_enriched.py `
+    --frequency weekly --method both `
+    --output-dir outputs/random_forest_enriched `
+    --n-jobs -1
+```
+
+특정 grid를 파일로 지정할 때 사용하는 JSON 형식:
+
+```json
+{
+  "n_estimators": [300, 500],
+  "max_depth": [8, 16],
+  "min_samples_split": [2, 10],
+  "min_samples_leaf": [1, 5],
+  "max_features": [0.7, 1.0]
+}
+```
+
+실행 결과에는 `predictions.parquet`, `metrics.csv`, `horizon_metrics.csv`, `feature_importance.csv`, `training_info.csv`, `model.joblib`가 저장된다.
+
+### 5.7 모델별 feature importance 해석 주의
+
+LR은 계수 크기, XGBoost/LightGBM은 gain, Random Forest는 MDI를 사용한다. 서로 값의 절대 크기를 직접 비교하지 말고, 각 모델 내부에서 feature 순위를 비교해야 한다.
+
 ## 6. 평가 지표
 
 각 target에 대해 다음 지표를 저장한다.
@@ -306,4 +351,3 @@ Git에는 코드, 문서, requirements, 재현 가능한 grid 설정을 올린�
 - `__pycache__/`
 
 대용량 데이터와 결과는 별도의 스토리지나 Google Drive/서버 저장소로 관리하고, Git 문서에는 생성 방법과 경로만 기록한다.
-
