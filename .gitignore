@@ -1,0 +1,26 @@
+# Local Python environments and caches
+ts/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Local IDE and OS files
+.vscode/
+.idea/
+*.code-workspace
+
+# Dataset and generated artifacts
+Berka Dataset/
+outputs/
+eda_outputs/
+*.parquet
+*.csv
+*.joblib
+*.png
+
+# Local logs and temporary files
+*.log
+tmp/
+temp/
