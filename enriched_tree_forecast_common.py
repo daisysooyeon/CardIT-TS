@@ -347,10 +347,14 @@ def run_one(
     params: dict[str, float | int],
     grid_id: str,
     args: argparse.Namespace,
+    data: EnrichedForecastData | None = None,
 ) -> pd.DataFrame:
-    data = create_enriched_forecast_data(
-        frequency, account_ids, include_history_features=not args.exclude_lag_rolling
-    )
+    if data is None:
+        data = create_enriched_forecast_data(
+            frequency,
+            account_ids,
+            include_history_features=not args.exclude_lag_rolling,
+        )
     if method == "recursive":
         models, training_info = fit_recursive_model(
             model_name, data, params, args.n_jobs, args.random_state, args.device_type
@@ -428,6 +432,11 @@ def main(model_name: str) -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     comparison_path = args.output_dir / "horizon_comparison_metrics.csv"
     rows: list[pd.DataFrame] = []
+    # Building an enriched feature table is expensive, especially for weekly
+    # direct forecasts because it contains one table per horizon.  Reuse the
+    # immutable data object across grids and methods for each frequency.  The
+    # old flow rebuilt all feature tables inside run_one for every run.
+    data_by_frequency: dict[str, EnrichedForecastData] = {}
     for index, params in enumerate(param_grid, start=1):
         grid_id = make_grid_id(model_name, index, params)
         (args.output_dir / grid_id).mkdir(parents=True, exist_ok=True)
@@ -445,7 +454,25 @@ def main(model_name: str) -> None:
                             continue
                     except (OSError, pd.errors.ParserError, UnicodeDecodeError):
                         pass
-                rows.append(run_one(model_name, frequency, method, args.output_dir, accounts_by_frequency[frequency], params, grid_id, args))
+                if frequency not in data_by_frequency:
+                    data_by_frequency[frequency] = create_enriched_forecast_data(
+                        frequency,
+                        accounts_by_frequency[frequency],
+                        include_history_features=not args.exclude_lag_rolling,
+                    )
+                rows.append(
+                    run_one(
+                        model_name,
+                        frequency,
+                        method,
+                        args.output_dir,
+                        accounts_by_frequency[frequency],
+                        params,
+                        grid_id,
+                        args,
+                        data=data_by_frequency[frequency],
+                    )
+                )
                 pd.concat(rows, ignore_index=True).to_csv(comparison_path, index=False)
 
     if not rows:

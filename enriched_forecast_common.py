@@ -18,7 +18,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from enrich_master_features import _first_due_period, _parse_berka_date
+from fixed_cost_schedule import (
+    first_due_period as _first_due_period,
+    parse_berka_date as _parse_berka_date,
+)
 from linear_regression_forecast import (
     FLOW_COLUMNS,
     FLOW_TARGETS,

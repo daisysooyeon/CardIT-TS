@@ -33,10 +33,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from fixed_cost_schedule import build_loan_schedule
+
 
 ROOT = Path(__file__).resolve().parent
 MASTER_DIR = ROOT / "Berka Dataset" / "Berka Dataset" / "master_tables"
-LOAN_PATH = ROOT / "Berka Dataset" / "Berka Dataset" / "loan.csv"
 
 
 # Historical Czech non-working holidays for the Berka observation period.
@@ -204,78 +205,12 @@ def _weekly_calendar_features(periods: pd.DatetimeIndex) -> pd.DataFrame:
     )
 
 
-def _parse_berka_date(values: pd.Series) -> pd.Series:
-    """Parse Berka's six-digit YYMMDD date format."""
-    return pd.to_datetime(values.astype(str), format="%y%m%d")
-
-
-def _first_due_period(loan_date: pd.Timestamp) -> pd.Period:
-    """Return the month containing the first scheduled payment on day 12."""
-    period = loan_date.to_period("M")
-    if loan_date.day > 12:
-        period += 1
-    return period
-
-
 def _loan_schedule(
     frequency: str,
     account_periods: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Create contractual loan repayment amounts by account and period.
-
-    ``loan.payments`` is deliberately used as the planned amount.  Actual
-    ``trans`` UVER amounts can be rounded, delayed, missing, or anomalous.
-    """
-    loans = pd.read_csv(
-        LOAN_PATH,
-        sep=";",
-        usecols=["account_id", "date", "payments", "duration"],
-    )
-    loans["account_id"] = loans["account_id"].astype(int)
-    loans["loan_date"] = _parse_berka_date(loans.pop("date"))
-    loans["payments"] = pd.to_numeric(loans["payments"], errors="coerce")
-    loans["duration"] = pd.to_numeric(loans["duration"], errors="coerce")
-    loans = loans.dropna(subset=["loan_date", "payments", "duration"])
-    loans["duration"] = loans["duration"].astype(int)
-
-    records: list[dict[str, object]] = []
-    for loan in loans.itertuples(index=False):
-        first_period = _first_due_period(loan.loan_date)
-        for offset in range(int(loan.duration)):
-            due_period = first_period + offset
-            due_date = due_period.to_timestamp() + pd.Timedelta(days=11)
-            if frequency == "monthly":
-                period_start = due_period.to_timestamp()
-            else:
-                period_start = _week_start_for_date(due_date)
-            records.append(
-                {
-                    "account_id": int(loan.account_id),
-                    "period_start": period_start,
-                    "scheduled_loan_repayment": float(loan.payments),
-                }
-            )
-
-    schedule = pd.DataFrame(records)
-    if schedule.empty:
-        return pd.DataFrame(
-            columns=["account_id", "period_start", "scheduled_loan_repayment"]
-        )
-
-    schedule = (
-        schedule.groupby(["account_id", "period_start"], as_index=False)[
-            "scheduled_loan_repayment"
-        ]
-        .sum()
-    )
-    valid_keys = account_periods[["account_id", "period_start"]].drop_duplicates()
-    schedule = schedule.merge(
-        valid_keys,
-        on=["account_id", "period_start"],
-        how="inner",
-        validate="many_to_one",
-    )
-    return schedule
+    """Create the canonical contractual loan schedule for the master table."""
+    return build_loan_schedule(frequency, account_periods)
 
 
 def enrich_master(frequency: str, output_path: Path) -> pd.DataFrame:
